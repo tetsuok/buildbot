@@ -22,7 +22,6 @@ from twisted.python import log
 from buildbot.util import bytes2unicode
 
 GIT_BRANCH_REF = "refs/heads/{}"
-GIT_MERGE_REF = "refs/pull-requests/{}/merge"
 GIT_TAG_REF = "refs/tags/{}"
 
 _HEADER_EVENT = b'X-Event-Key'
@@ -113,27 +112,28 @@ class BitbucketCloudEventHandler:
     def handle_pullrequest_created(self, payload):
         return self.handle_pullrequest(
             payload,
-            GIT_MERGE_REF.format(int(payload['pullrequest']['id'])),
+            GIT_BRANCH_REF.format(payload['pullrequest']['source']['branch']['name']),
             "pull-created")
 
     def handle_pullrequest_updated(self, payload):
         return self.handle_pullrequest(
             payload,
-            GIT_MERGE_REF.format(int(payload['pullrequest']['id'])),
+            GIT_BRANCH_REF.format(
+                payload['pullrequest']['source']['branch']['name']),
             "pull-updated")
 
     def handle_pullrequest_fulfilled(self, payload):
         return self.handle_pullrequest(
             payload,
             GIT_BRANCH_REF.format(
-                payload['pullrequest']['toRef']['branch']['name']),
+                payload['pullrequest']['source']['branch']['name']),
             "pull-fulfilled")
 
     def handle_pullrequest_rejected(self, payload):
         return self.handle_pullrequest(
             payload,
             GIT_BRANCH_REF.format(
-                payload['pullrequest']['fromRef']['branch']['name']),
+                payload['pullrequest']['source']['branch']['name']),
             "pull-rejected")
 
     def handle_pullrequest(self, payload, refname, category):
@@ -141,8 +141,8 @@ class BitbucketCloudEventHandler:
         repo_url = payload['repository']['links']['self']['href']
         project = payload['repository'].get('project', {'name': 'none'})['name']
         change = {
-            'revision': payload['pullrequest']['fromRef']['commit']['hash'],
-            'revlink': payload['pullrequest']['link'],
+            'revision': payload['pullrequest']['source']['commit']['hash'],
+            'revlink': payload['pullrequest']['links']['self']['href'],
             'repository': repo_url,
             'author': '{} <{}>'.format(payload['actor']['display_name'],
                                        payload['actor']['nickname']),
@@ -150,7 +150,7 @@ class BitbucketCloudEventHandler:
             'branch': refname,
             'project': project,
             'category': category,
-            'properties': {'pullrequesturl': payload['pullrequest']['link']}
+            'properties': {'pullrequesturl': payload['pullrequest']['links']['html']['href']}
         }
 
         if callable(self._codebase):
